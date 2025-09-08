@@ -6,8 +6,26 @@ import { motion } from "framer-motion";
 export default function NewsletterSignup() {
   const sectionRef = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [floatingIcons, setFloatingIcons] = useState([]);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
+    
+    // Generate icons only on client side
+    setFloatingIcons(
+      [...Array(12)].map(() => ({
+        top: `${Math.random() * 100}%`,
+        left: `${Math.random() * 100}%`,
+        scale: Math.random() * 0.5 + 0.5,
+        y: Math.random() * 100,
+      }))
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!sectionRef.current) return;
+    
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -17,9 +35,7 @@ export default function NewsletterSignup() {
       { threshold: 0.1 }
     );
 
-    if (sectionRef.current) {
-      observer.observe(sectionRef.current);
-    }
+    observer.observe(sectionRef.current);
 
     return () => {
       if (sectionRef.current) {
@@ -37,32 +53,36 @@ export default function NewsletterSignup() {
       <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-yellow-200/20 to-transparent"></div>
       <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-amber-200/20 to-transparent"></div>
       
-      {/* Floating Mail Icons */}
-      {[...Array(6)].map((_, i) => (
+      {/* Floating Mail Icons - Only render on client side */}
+      {isClient && floatingIcons.map((icon, i) => (
         <motion.div
           key={i}
-          className="absolute text-yellow-300/30"
-          initial={{ 
-            y: Math.random() * 100,
-            x: Math.random() * 100,
-            scale: Math.random() * 0.5 + 0.5,
+          className="absolute text-yellow-300/30 z-0"
+          initial={{ y: icon.y, x: Math.random() * 100, scale: icon.scale }}
+          animate={{
+            y: isVisible ? [icon.y, icon.y + 30, icon.y] : icon.y,
+            rotate: isVisible ? [0, 15, -15, 0] : 0,
           }}
-          animate={{ 
-            y: isVisible ? (Math.random() * 50 - 25) : 0,
-            rotate: isVisible ? (Math.random() * 20 - 10) : 0,
-          }}
-          transition={{ 
-            duration: 8,
+          transition={{
+            duration: 6 + Math.random() * 4,
             repeat: Infinity,
-            repeatType: "reverse"
+            ease: "easeInOut",
           }}
-          style={{
-            top: `${Math.random() * 100}%`,
-            left: `${Math.random() * 100}%`,
-          }}
+          style={{ top: icon.top, left: icon.left }}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-10 w-10"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1}
+              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+            />
           </svg>
         </motion.div>
       ))}

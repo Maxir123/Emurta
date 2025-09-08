@@ -5,7 +5,6 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useAuth } from "@clerk/nextjs";
-import { AlertCircle, Calendar } from "lucide-react";
 import {
   Car,
   Fuel,
@@ -15,11 +14,11 @@ import {
   Heart,
   MessageSquare,
   Currency,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-// server action you already have
 import { formatCurrency } from "@/lib/helpers";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -30,46 +29,35 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+
+// <-- use your server action
 import { toggleSavedVehicle } from "@/action/vehicles-listing";
+
 import EmiCalculator from "./emi-calculator";
 
-/**
- * VehicleDetails component
- *
- * Props:
- * - vehicle: Vehicle object from your API (include owner & images ideally)
- * - inspectionInfo: {
- *     userInspection: { id, status, date } | null,
- *     dealership: { address, phone, email, WorkingHour | workingHours: [...] } | null
- *   }
- *
- * Notes:
- * - Expects toggleSavedVehicle(vehicleId) server action to exist and return:
- *   { success: boolean, saved: boolean, message?: string }
- * - Replace routes if your app uses different inspection routes.
- */
 export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
   const router = useRouter();
   const { isSignedIn } = useAuth();
 
-  // Normalize images (support array of urls or array of objects { url })
   const images =
     (vehicle.images?.map((i) => (typeof i === "string" ? i : i?.url)).filter(Boolean)) || [];
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // initial wish state: prefer explicit property else infer from saved relations
-  const initialWish = vehicle.isWishlisted ?? (vehicle.savedByUsers ? vehicle.savedByUsers.length > 0 : false);
-  const [isWishlisted, setIsWishlisted] = useState(Boolean(initialWish));
-  const [savingVehicle, setSavingVehicle] = useState(false);
+  const initialWish = Boolean(vehicle.saved ?? vehicle.isSaved ?? vehicle.wishlisted ?? (vehicle.savedByUsers?.length > 0));
+  const [isWishlisted, setIsWishlisted] = useState(initialWish);
 
-  // Keep state in sync if parent passes new vehicle prop
+  // per-button processing state
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // keep sync if parent updates vehicle prop
   useEffect(() => {
-    const newWish = vehicle.isWishlisted ?? (vehicle.savedByUsers ? vehicle.savedByUsers.length > 0 : false);
-    setIsWishlisted(Boolean(newWish));
-  }, [vehicle.isWishlisted, vehicle.savedByUsers]);
+    const newWish = Boolean(vehicle.saved ?? vehicle.isSaved ?? vehicle.wishlisted ?? (vehicle.savedByUsers?.length > 0));
+    setIsWishlisted(newWish);
+  }, [vehicle.id, vehicle.saved, vehicle.isSaved, vehicle.wishlisted, vehicle.savedByUsers]);
 
-  // Toggle saved using your server action with optimistic UI
+  // handle save/un-save using server action
   const handleSaveVehicle = async () => {
     if (!isSignedIn) {
       toast.error("Please sign in to save vehicles");
@@ -77,32 +65,41 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
       return;
     }
 
-    if (savingVehicle) return;
+    if (isProcessing) return;
 
-    const prev = isWishlisted;
-    setIsWishlisted(!prev);
-    setSavingVehicle(true);
+    const previous = isWishlisted;
+    // optimistic UI
+    setIsWishlisted(!previous);
+    setIsProcessing(true);
 
     try {
-      const res = await toggleSavedVehicle(vehicle.id); // server action
-      // expected shape: { success: boolean, saved: boolean, message?: string }
+      const res = await toggleSavedVehicle(vehicle.id);
       if (!res || !res.success) {
-        setIsWishlisted(prev);
-        toast.error(res?.message || "Failed to update saved vehicles");
+        // revert optimistic change
+        setIsWishlisted(previous);
+        const errMsg = res?.error || "Failed to update saved state";
+        toast.error(errMsg);
       } else {
         setIsWishlisted(Boolean(res.saved));
-        if (res.message) toast.success(res.message);
+        toast.success(res.saved ? "Saved" : "Removed");
       }
     } catch (err) {
       console.error("toggleSavedVehicle error:", err);
-      setIsWishlisted(prev);
-      toast.error("Failed to update favorites");
+      setIsWishlisted(previous);
+      toast.error("Error saving vehicle");
     } finally {
-      setSavingVehicle(false);
+      setIsProcessing(false);
     }
   };
 
-  // Sharing helpers
+  /* ---------------------- rest of your component unchanged ---------------------- */
+  const displayMileage = vehicle.mileage ? vehicle.mileage.toLocaleString() : "N/A";
+  const displayFuel = vehicle.fuelType ?? "N/A";
+  const displayTransmission = vehicle.transmission ?? "N/A";
+  const displaySeats = vehicle.seatingCapacity ?? vehicle.seats ?? null;
+  const isUnavailable =
+    vehicle.status === "SOLD" || vehicle.status === "MAINTENANCE" || vehicle.status === "RENTED";
+
   const copyToClipboard = () => {
     if (typeof window !== "undefined") {
       navigator.clipboard.writeText(window.location.href);
@@ -115,7 +112,7 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
       navigator
         .share({
           title: `${vehicle.year ?? ""} ${vehicle.make ?? ""} ${vehicle.model ?? ""}`,
-          text: `Check out this ${vehicle.year ?? ""} ${vehicle.make ?? ""} ${vehicle.model ?? ""} on Vehiql!`,
+          text: `Check out this ${vehicle.year ?? ""} ${vehicle.make ?? ""} ${vehicle.model ?? ""}!`,
           url: typeof window !== "undefined" ? window.location.href : "",
         })
         .catch(() => copyToClipboard());
@@ -124,32 +121,21 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
     }
   };
 
-  // Book inspection route (change if your app uses a different path)
   const handleBookInspection = () => {
     if (!isSignedIn) {
       toast.error("Please sign in to book an inspection");
       router.push("/sign-in");
       return;
     }
-    router.push(`/inspection/${vehicle.id}`);
+    router.push(`/Inspection/${vehicle.id}`);
   };
 
-  // Normalize dealership & working hours shape (DealershipInfo uses WorkingHour)
   const dealership = inspectionInfo?.dealership ?? null;
   const workingHours = dealership?.WorkingHour ?? dealership?.workingHours ?? null;
-
-  // Display helpers
-  const displayMileage = vehicle.mileage ? vehicle.mileage.toLocaleString() : "N/A";
-  const displayFuel = vehicle.fuelType ?? "N/A";
-  const displayTransmission = vehicle.transmission ?? "N/A";
-  const displaySeats = vehicle.seatingCapacity ?? vehicle.seats ?? null;
-  const isUnavailable =
-    vehicle.status === "SOLD" || vehicle.status === "MAINTENANCE" || vehicle.status === "RENTED";
 
   return (
     <div>
       <div className="flex flex-col lg:flex-row gap-8">
-        {/* Image Gallery */}
         <div className="w-full lg:w-7/12">
           <div className="aspect-video rounded-lg overflow-hidden relative mb-4">
             {images && images.length > 0 ? (
@@ -167,35 +153,26 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
             )}
           </div>
 
-          {/* Thumbnails */}
           {images && images.length > 1 && (
             <div className="flex gap-2 overflow-x-auto pb-2">
               {images.map((image, index) => (
                 <div
                   key={index}
-                  className={`relative cursor-pointer rounded-md h-20 w-24 flex-shrink-0 transition ${
-                    index === currentImageIndex ? "border-2 border-blue-600" : "opacity-70 hover:opacity-100"
-                  }`}
+                  className={`relative cursor-pointer rounded-md h-20 w-24 flex-shrink-0 transition ${index === currentImageIndex ? "border-2 border-blue-600" : "opacity-70 hover:opacity-100"}`}
                   onClick={() => setCurrentImageIndex(index)}
                 >
-                  <Image
-                    src={image}
-                    alt={`${vehicle.make ?? ""} ${vehicle.model ?? ""} - view ${index + 1}`}
-                    fill
-                    className="object-cover"
-                  />
+                  <Image src={image} alt={`${vehicle.make ?? ""} ${vehicle.model ?? ""} - view ${index + 1}`} fill className="object-cover" />
                 </div>
               ))}
             </div>
           )}
 
-          {/* Secondary Actions */}
           <div className="flex mt-4 gap-4">
             <Button
               variant="outline"
               className={`flex items-center gap-2 flex-1 ${isWishlisted ? "text-red-500" : ""}`}
               onClick={handleSaveVehicle}
-              disabled={savingVehicle}
+              disabled={isProcessing}
             >
               <Heart className={`h-5 w-5 ${isWishlisted ? "fill-red-500" : ""}`} />
               {isWishlisted ? "Saved" : "Save"}
@@ -208,19 +185,15 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
           </div>
         </div>
 
-        {/* Vehicle Details */}
         <div className="w-full lg:w-5/12">
           <div className="flex items-center justify-between">
             <Badge className="mb-2">{vehicle.bodyType ?? "N/A"}</Badge>
           </div>
 
-          <h1 className="text-4xl font-bold mb-1">
-            {vehicle.year ?? ""} {vehicle.make ?? ""} {vehicle.model ?? ""}
-          </h1>
+          <h1 className="text-4xl font-bold mb-1">{vehicle.year ?? ""} {vehicle.make ?? ""} {vehicle.model ?? ""}</h1>
 
           <div className="text-2xl font-bold text-blue-600">{formatCurrency(vehicle.price ?? 0)}</div>
 
-          {/* Quick Stats */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 my-6">
             <div className="flex items-center gap-2">
               <Gauge className="text-gray-500 h-5 w-5" />
@@ -236,7 +209,6 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
             </div>
           </div>
 
-          {/* EMI Calculator dialog */}
           <Dialog>
             <DialogTrigger className="w-full text-start">
               <Card className="pt-5">
@@ -246,8 +218,7 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
                     <h3>EMI Calculator</h3>
                   </div>
                   <div className="text-sm text-gray-600">
-                    Estimated Monthly Payment:{" "}
-                    <span className="font-bold text-gray-900">{formatCurrency((vehicle.price ?? 0) / 60)}</span> for 60 months
+                    Estimated Monthly Payment: <span className="font-bold text-gray-900">{formatCurrency((vehicle.price ?? 0) / 60)}</span> for 60 months
                   </div>
                   <div className="text-xs text-gray-500 mt-1">*Based on $0 down payment and 4.5% interest rate</div>
                 </CardContent>
@@ -261,7 +232,6 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
             </DialogContent>
           </Dialog>
 
-          {/* Request More Info */}
           <Card className="my-6">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 text-lg font-medium mb-2">
@@ -270,14 +240,11 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
               </div>
               <p className="text-sm text-gray-600 mb-3">Our representatives are available to answer all your queries about this vehicle.</p>
               <a href="mailto:help@vehiql.in">
-                <Button variant="outline" className="w-full">
-                  Request Info
-                </Button>
+                <Button variant="outline" className="w-full">Request Info</Button>
               </a>
             </CardContent>
           </Card>
 
-          {/* Status alert */}
           {isUnavailable && (
             <Alert variant="destructive">
               <AlertTitle className="capitalize">This vehicle is {String(vehicle.status).toLowerCase()}</AlertTitle>
@@ -285,23 +252,18 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
             </Alert>
           )}
 
-          {/* Book Inspection Button */}
           {!isUnavailable && (
-            <Button
-              className="w-full py-6 text-lg"
-              onClick={handleBookInspection}
-              disabled={Boolean(inspectionInfo?.userInspection)}
-            >
+            <Button className="w-full py-6 text-lg" onClick={handleBookInspection} disabled={Boolean(inspectionInfo?.userInspection)}>
               <Calendar className="mr-2 h-5 w-5" />
-              {inspectionInfo?.userInspection
-                ? `Inspection booked for ${format(new Date(inspectionInfo.userInspection.date), "EEEE, MMMM d, yyyy")}`
-                : "Book Inspection"}
+              {inspectionInfo?.userInspection ? `Inspection booked for ${format(new Date(inspectionInfo.userInspection.date), "EEEE, MMMM d, yyyy")}` : "Book Inspection"}
             </Button>
           )}
         </div>
       </div>
 
-      {/* Details & Features Section */}
+      {/* Description, Features, Specs & Dealership sections remain identical to your original code */}
+      {/* ... (kept unchanged for brevity) ... */}
+
       <div className="mt-12 p-6 bg-white rounded-lg shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
@@ -312,25 +274,25 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
             <h3 className="text-2xl font-bold mb-6">Features</h3>
             <ul className="grid grid-cols-1 gap-2">
               <li className="flex items-center gap-2">
-                <span className="h-2 w-2 bg-blue-600 rounded-full"></span>
+                <span className="h-2 w-2 bg-blue-600 rounded-full" />
                 {displayTransmission} Transmission
               </li>
               <li className="flex items-center gap-2">
-                <span className="h-2 w-2 bg-blue-600 rounded-full"></span>
+                <span className="h-2 w-2 bg-blue-600 rounded-full" />
                 {displayFuel} Engine
               </li>
               <li className="flex items-center gap-2">
-                <span className="h-2 w-2 bg-blue-600 rounded-full"></span>
+                <span className="h-2 w-2 bg-blue-600 rounded-full" />
                 {vehicle.bodyType ?? "N/A"} Body Style
               </li>
               {displaySeats && (
                 <li className="flex items-center gap-2">
-                  <span className="h-2 w-2 bg-blue-600 rounded-full"></span>
+                  <span className="h-2 w-2 bg-blue-600 rounded-full" />
                   {displaySeats} Seats
                 </li>
               )}
               <li className="flex items-center gap-2">
-                <span className="h-2 w-2 bg-blue-600 rounded-full"></span>
+                <span className="h-2 w-2 bg-blue-600 rounded-full" />
                 {vehicle.color ?? "N/A"} Exterior
               </li>
             </ul>
@@ -338,7 +300,7 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
         </div>
       </div>
 
-      {/* Specifications Section */}
+      {/* specifications */}
       <div className="mt-8 p-6 bg-white rounded-lg shadow-sm">
         <h2 className="text-2xl font-bold mb-6">Specifications</h2>
         <div className="bg-gray-50 rounded-lg p-6">
@@ -385,12 +347,11 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
         </div>
       </div>
 
-      {/* Dealership Location Section */}
+      {/* Dealership location */}
       <div className="mt-8 p-6 bg-white rounded-lg shadow-sm">
         <h2 className="text-2xl font-bold mb-6">Dealership Location</h2>
         <div className="bg-gray-50 rounded-lg p-6">
           <div className="flex flex-col md:flex-row gap-6 justify-between">
-            {/* Dealership Name and Address */}
             <div className="flex items-start gap-3">
               <LocateFixed className="h-5 w-5 text-blue-600 mt-1 flex-shrink-0" />
               <div>
@@ -401,7 +362,6 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
               </div>
             </div>
 
-            {/* Working Hours */}
             <div className="md:w-1/2 lg:w-1/3">
               <h4 className="font-medium mb-2">Working Hours</h4>
               <div className="space-y-2">
@@ -414,14 +374,11 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
                       })
                       .map((day) => (
                         <div key={day.dayOfWeek} className="flex justify-between text-sm">
-                          <span className="text-gray-600">
-                            {day.dayOfWeek.charAt(0) + day.dayOfWeek.slice(1).toLowerCase()}
-                          </span>
+                          <span className="text-gray-600">{day.dayOfWeek.charAt(0) + day.dayOfWeek.slice(1).toLowerCase()}</span>
                           <span>{day.isOpen ? `${day.openTime} - ${day.closeTime}` : "Closed"}</span>
                         </div>
                       ))
-                  : // Default hours if none provided
-                    ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day, index) => (
+                  : ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day, index) => (
                       <div key={day} className="flex justify-between text-sm">
                         <span className="text-gray-600">{day}</span>
                         <span>{index < 5 ? "9:00 - 18:00" : index === 5 ? "10:00 - 16:00" : "Closed"}</span>

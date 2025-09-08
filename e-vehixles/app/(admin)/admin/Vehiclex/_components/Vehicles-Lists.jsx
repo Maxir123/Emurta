@@ -187,7 +187,7 @@ const VehiclesLists = () => {
                       <div className="w-16 h-16 rounded-md overflow-hidden flex-shrink-0">
                         {vehicle.images && vehicle.images.length > 0 ? (
                           <Image
-                            src={vehicle.images[0].url}
+                            src={vehicle.images[0]}
                             alt={`${vehicle.make} ${vehicle.model}`}
                             height={64}
                             width={64}
@@ -305,7 +305,7 @@ const VehiclesLists = () => {
                           <div className="w-10 h-10 rounded-md overflow-hidden">
                             {vehicle.images && vehicle.images.length > 0 ? (
                               <Image
-                                src={vehicle.images[0].url}
+                                src={vehicle.images[0]}
                                 alt={`${vehicle.make} ${vehicle.model}`}
                                 height={40}
                                 width={40}

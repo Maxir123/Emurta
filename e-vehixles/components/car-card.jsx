@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
+
 
 export function CarCard({ car }) {
   return (
@@ -42,7 +44,10 @@ export function CarCard({ car }) {
           <p className="text-lg font-bold text-green-600">
             ₦{car.price?.toLocaleString()}
           </p>
-          <Button size="sm">View Details</Button>
+          <Link href={`/Car/${car.id}`} passHref>
+            <Button size="sm">View Details</Button>
+          </Link>
+
         </div>
       </div>
     </div>
