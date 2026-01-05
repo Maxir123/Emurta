@@ -37,11 +37,9 @@ function getStatusSummary(inspections) {
 
 export default async function ReservationsPage() {
   const { userId } = await auth();
-  if (!userId) {
-    redirect("/sign-in?redirect=/inspections");
-  }
+  if (!userId) redirect("/sign-in?redirect=/inspections");
 
-  const raw = await getUserInspections();
+  const raw = await getUserInspections(userId);
   const inspections = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
   console.log("Server inspections preview:", inspections.map(i => ({ id: i.id, status: i.status, vehicleId: i.vehicleId, hasVehicle: !!i.vehicle })));
 

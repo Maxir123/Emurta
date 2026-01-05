@@ -10,20 +10,23 @@ datasource db {
 }
 
 model User {
-  id            Int            @id @default(autoincrement())
-  clerkUserId   String         @unique
-  email         String         @unique
-  fullName      String?
-  phone         String?
-  address       String?
-  role          UserRole       @default(USER)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  orders        CustomOrder[]
-  inspections   Inspection[]   @relation("UserInspections")
-  rentals       Rental[]
-  savedVehicles SavedVehicle[]
-  vehicles      Vehicle[]
+  id                     Int            @id @default(autoincrement())
+  clerkUserId            String         @unique
+  email                  String         @unique
+  fullName               String?
+  phone                  String?
+  address                String?
+  role                   UserRole       @default(USER)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  orders                 CustomOrder[]
+  // Relations
+  inspections            Inspection[]   @relation("UserInspections") // as customer
+  inspectionsAsInspector Inspection[]   @relation("InspectorInspections") // as inspector
+  rentals                Rental[]
+  savedVehicles          SavedVehicle[]
+  vehicles               Vehicle[]
+  Testimonial            Testimonial[]
 }
 
 model Vehicle {
@@ -47,7 +50,7 @@ model Vehicle {
   isVerified           Boolean           @default(false)
   status               VehicleStatus     @default(AVAILABLE)
   condition            VehicleCondition? // 👈 Added
-  location             NigerianState?    // 👈 Added
+  location             NigerianState? // 👈 Added
   userId               Int
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
@@ -98,14 +101,18 @@ model SavedVehicle {
 model Inspection {
   id          Int              @id @default(autoincrement())
   vehicleId   Int
+  userId      Int
   inspectorId Int
   status      InspectionStatus @default(SCHEDULED)
   date        DateTime
   notes       String?
   rating      Int?
   createdAt   DateTime         @default(now())
-  inspector   User             @relation("UserInspections", fields: [inspectorId], references: [id])
-  vehicle     Vehicle          @relation(fields: [vehicleId], references: [id])
+
+  // Relations
+  user      User    @relation("UserInspections", fields: [userId], references: [id])
+  inspector User    @relation("InspectorInspections", fields: [inspectorId], references: [id])
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
 }
 
 model CustomOrder {
@@ -161,6 +168,25 @@ model WorkingHour {
   DealershipInfo DealershipInfo @relation(fields: [dealershipId], references: [id])
 }
 
+model Testimonial {
+  id        Int      @id @default(autoincrement())
+  name      String?          // <--- add this
+  quote     String
+  rating    Int      @default(5)
+  imageUrl  String?
+  createdAt DateTime @default(now())
+
+  userId Int? // make optional if you want to allow anonymous testimonials
+  user   User? @relation(fields: [userId], references: [id])
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+}
+
 enum UserRole {
   USER
   ADMIN
@@ -190,6 +216,7 @@ enum FuelType {
   HYBRID
   CNG
 }
+
 enum VehicleCondition {
   NEW
   USED
@@ -236,7 +263,6 @@ enum NigerianState {
   YOBE
   ZAMFARA
 }
-
 
 enum TransmissionType {
   MANUAL

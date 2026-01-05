@@ -30,9 +30,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-// <-- use your server action
 import { toggleSavedVehicle } from "@/action/vehicles-listing";
-
 import EmiCalculator from "./emi-calculator";
 
 export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
@@ -44,18 +42,41 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // initial wish state: prefer explicit property else infer from saved relations
-  const initialWish = Boolean(vehicle.saved ?? vehicle.isSaved ?? vehicle.wishlisted ?? (vehicle.savedByUsers?.length > 0));
+  // initial wish state
+  const initialWish = Boolean(
+    vehicle.saved ?? vehicle.isSaved ?? vehicle.wishlisted ?? (vehicle.savedByUsers?.length > 0)
+  );
   const [isWishlisted, setIsWishlisted] = useState(initialWish);
 
   // per-button processing state
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // keep sync if parent updates vehicle prop
+  // hasInspection local state (robust detection)
+  const detectHasInspection = (inspectionInfoParam, vehicleParam) => {
+    // 1) explicit userInspection object (preferred)
+    if (inspectionInfoParam && (inspectionInfoParam.userInspection || inspectionInfoParam.userInspectionId)) return true;
+
+    // 2) sometimes the server returns inspection directly on vehicle (userInspection or inspections array)
+    if (vehicleParam) {
+      if (vehicleParam.userInspection) return true;
+      // any non-cancelled inspection present — this is conservative; server ideally should indicate per-user booking
+      if (Array.isArray(vehicleParam.inspections) && vehicleParam.inspections.some((i) => i && i.status && i.status !== "CANCELLED")) return true;
+    }
+    return false;
+  };
+
+  const [hasInspection, setHasInspection] = useState(detectHasInspection(inspectionInfo, vehicle));
+
+  // keep sync if parent updates vehicle or inspectionInfo
   useEffect(() => {
-    const newWish = Boolean(vehicle.saved ?? vehicle.isSaved ?? vehicle.wishlisted ?? (vehicle.savedByUsers?.length > 0));
+    const newWish = Boolean(
+      vehicle.saved ?? vehicle.isSaved ?? vehicle.wishlisted ?? (vehicle.savedByUsers?.length > 0)
+    );
     setIsWishlisted(newWish);
-  }, [vehicle.id, vehicle.saved, vehicle.isSaved, vehicle.wishlisted, vehicle.savedByUsers]);
+
+    // re-evaluate inspection presence whenever props change
+    setHasInspection(detectHasInspection(inspectionInfo, vehicle));
+  }, [vehicle, inspectionInfo]);
 
   // handle save/un-save using server action
   const handleSaveVehicle = async () => {
@@ -68,14 +89,12 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
     if (isProcessing) return;
 
     const previous = isWishlisted;
-    // optimistic UI
     setIsWishlisted(!previous);
     setIsProcessing(true);
 
     try {
       const res = await toggleSavedVehicle(vehicle.id);
       if (!res || !res.success) {
-        // revert optimistic change
         setIsWishlisted(previous);
         const errMsg = res?.error || "Failed to update saved state";
         toast.error(errMsg);
@@ -122,20 +141,56 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
   };
 
   const handleBookInspection = () => {
+    // double-check guard
+    if (hasInspection) {
+      toast.error("You already have an inspection booked for this vehicle.");
+      return;
+    }
+
     if (!isSignedIn) {
       toast.error("Please sign in to book an inspection");
       router.push("/sign-in");
       return;
     }
+
+    // disable immediately to avoid double-click navigation
+    setHasInspection(true);
     router.push(`/Inspection/${vehicle.id}`);
   };
 
+  // derive a safe inspection date string if present
+  const getInspectionDateString = () => {
+    const ui = inspectionInfo?.userInspection ?? inspectionInfo ?? vehicle?.userInspection;
+    // also check vehicle.inspections for a date
+    if (!ui) {
+      const found = Array.isArray(vehicle?.inspections) ? vehicle.inspections.find(i => i && i.status && i.status !== "CANCELLED") : null;
+      if (found && found.date) return safeFormatDate(found.date);
+      return null;
+    }
+    if (ui.date) return safeFormatDate(ui.date);
+    return null;
+  };
+
+  const safeFormatDate = (d) => {
+    try {
+      const dt = typeof d === "string" || typeof d === "number" ? new Date(d) : d;
+      if (isNaN(dt)) return null;
+      return format(dt, "EEEE, MMMM d, yyyy");
+    } catch {
+      return null;
+    }
+  };
+
+  const inspectionDateString = getInspectionDateString();
+
+  // UI
   const dealership = inspectionInfo?.dealership ?? null;
   const workingHours = dealership?.WorkingHour ?? dealership?.workingHours ?? null;
 
   return (
     <div>
       <div className="flex flex-col lg:flex-row gap-8">
+        {/* left column (images + save/share) */}
         <div className="w-full lg:w-7/12">
           <div className="aspect-video rounded-lg overflow-hidden relative mb-4">
             {images && images.length > 0 ? (
@@ -185,6 +240,7 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
           </div>
         </div>
 
+        {/* right column (details & CTA) */}
         <div className="w-full lg:w-5/12">
           <div className="flex items-center justify-between">
             <Badge className="mb-2">{vehicle.bodyType ?? "N/A"}</Badge>
@@ -209,6 +265,7 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
             </div>
           </div>
 
+          {/* EMI dialog omitted for brevity */}
           <Dialog>
             <DialogTrigger className="w-full text-start">
               <Card className="pt-5">
@@ -253,13 +310,18 @@ export default function VehicleDetails({ vehicle = {}, inspectionInfo = {} }) {
           )}
 
           {!isUnavailable && (
-            <Button className="w-full py-6 text-lg" onClick={handleBookInspection} disabled={Boolean(inspectionInfo?.userInspection)}>
+            <Button
+              className="w-full py-6 text-lg"
+              onClick={handleBookInspection}
+              disabled={Boolean(hasInspection) || isProcessing}
+            >
               <Calendar className="mr-2 h-5 w-5" />
-              {inspectionInfo?.userInspection ? `Inspection booked for ${format(new Date(inspectionInfo.userInspection.date), "EEEE, MMMM d, yyyy")}` : "Book Inspection"}
+              {hasInspection && inspectionDateString ? `Inspection booked for ${inspectionDateString}` : (hasInspection ? "Inspection booked" : "Book Inspection")}
             </Button>
           )}
         </div>
       </div>
+
 
       {/* Description, Features, Specs & Dealership sections remain identical to your original code */}
       {/* ... (kept unchanged for brevity) ... */}

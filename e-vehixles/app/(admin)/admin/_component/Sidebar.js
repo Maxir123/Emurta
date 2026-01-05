@@ -24,7 +24,6 @@ const routes = [
   { label: "Vehicles", icon: Car, href: "/admin/Vehiclex" },
   { label: "Rentals", icon: Truck, href: "/admin/rentals" },
   { label: "Inspections", icon: Calendar, href: "/admin/book-inspection" },
-  { label: "Customizations", icon: Wrench, href: "/admin/customizations" },
   { label: "Settings", icon: Settings, href: "/admin/settings" },
 ];
 

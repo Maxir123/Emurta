@@ -3,7 +3,7 @@ import { InspectionForm } from "./_components/test-drive-form";
 import { getVehicleById } from "@/action/vehicles-listing";
 
 export async function generateMetadata({ params }) {
-  const { id } = params;
+  const { id } = await params; // ✅
   const result = await getVehicleById(id);
   
   if (!result.success) {
@@ -22,7 +22,7 @@ export async function generateMetadata({ params }) {
 
 export default async function TestDrivePage({ params }) {
   // Fetch car details
-  const { id } = params;
+  const { id } = await params; // ✅
   const result = await getVehicleById(id);
 
   // If car not found, show 404

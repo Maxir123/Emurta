@@ -44,6 +44,8 @@ const formatTime = (timeString) => {
   }
 };
 
+
+
 // Helper function for status badge
 const getStatusBadge = (status) => {
   switch (status) {
@@ -108,6 +110,8 @@ export function InspectionCard({
   // normalize data
   const data = inspection || booking || {};
   const vehicle = data.vehicle || data.car || {};
+console.log("Vehicle:", vehicle);
+
   const status = data.status;
   const notes = data.notes;
   const user = data.user;
@@ -141,29 +145,42 @@ export function InspectionCard({
       )}>
         <div className="flex flex-col md:flex-row">
           {/* Vehicle Image */}
-          <div className="md:w-2/5 lg:w-1/4 relative h-48 md:h-auto">
-            {vehicle.images && vehicle.images.length > 0 ? (
-              <div className="relative w-full h-full">
-                <Image
-                  src={vehicle.images[0]}
-                  alt={`${vehicle.make || ""} ${vehicle.model || ""}`}
-                  fill
-                  className="object-cover"
-                />
-                <div className="absolute top-3 left-3 md:hidden">
-                  {getStatusBadge(status)}
-                </div>
-              </div>
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex flex-col items-center justify-center p-4">
-                <Car className="h-10 w-10 text-gray-400 mb-2" />
-                <p className="text-gray-500 text-sm text-center">No image available</p>
-              </div>
-            )}
-          </div>
+         <div className="md:w-2/5 lg:w-1/4 relative h-48 md:h-auto">
+  {vehicle.images?.length > 0 ? (
+    <div className="relative w-full h-full">
+      <Image
+        src={vehicle.images[0].url}
+        alt={`${vehicle.make || ""} ${vehicle.model || ""}`}
+        fill
+        className="object-cover"
+      />
+      <div className="absolute top-3 left-3 md:hidden">
+        {getStatusBadge(status)}
+      </div>
+    </div>
+  ) : vehicle.imageUrl ? (
+    <div className="relative w-full h-full">
+      <Image
+        src={vehicle.imageUrl}
+        alt={`${vehicle.make || ""} ${vehicle.model || ""}`}
+        fill
+        className="object-cover"
+      />
+      <div className="absolute top-3 left-3 md:hidden">
+        {getStatusBadge(status)}
+      </div>
+    </div>
+  ) : (
+    <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex flex-col items-center justify-center p-4">
+      <Car className="h-10 w-10 text-gray-400 mb-2" />
+      <p className="text-gray-500 text-sm text-center">No image available</p>
+    </div>
+  )}
+</div>
+
 
           {/* Content */}
-          <div className="flex-1 p-5">
+          <div className="flex-1 p-5">       
             <div className="flex justify-between items-start">
               <div className="flex-1">
                 <div className="hidden md:block mb-3">

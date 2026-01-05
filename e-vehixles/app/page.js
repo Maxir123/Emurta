@@ -6,6 +6,7 @@ import Testimonials from "@/components/Testimonials";
 import FeaturedVehicles from "@/components/FeaturedVehicles";
 import CallToAction from "@/components/CallToAction";
 import NewsletterSignup from "@/components/NewsletterSignup";
+import Link from "next/link";
 
 
 
@@ -68,12 +69,11 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
               <button className="px-6 py-3 bg-blue-600 rounded text-white hover:bg-blue-700">
-                Browse Listings
+                <Link href="/vehicles">Browse Listings</Link>
               </button>
               <button className="px-6 py-3 bg-black border border-white text-white rounded hover:bg-gray-200"
               >
-                
-                Learn More
+                <Link href="/about">Learn More</Link>
               </button>
             </div>
           </div>
@@ -131,7 +131,7 @@ export default function Home() {
           meets your exact needs.
         </p>
         <button className="px-6 py-3 bg-blue-600 text-white rounded hover:bg-blue-700">
-          Learn More About Us
+          <Link href="/about">Learn More About Us</Link>
         </button>
       </motion.div>
     </section>

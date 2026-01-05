@@ -3,6 +3,15 @@
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 
+const isDatabaseConnected = async () => {
+  try {
+    await db.$queryRaw`SELECT 1`;
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /** Helper: safe number parsing */
 function toNumberSafe(val, fallback = undefined) {
   if (val === undefined || val === null) return fallback;
@@ -33,7 +42,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 /** Retry helper with exponential backoff */
-async function retryAsync(fn, attempts = 3, baseMs = 200) {
+async function retryAsync(fn, attempts = 2, baseMs = 200) {
   let lastErr;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -211,9 +220,27 @@ async function getFiltersForMode(mode = "sale") {
 }
 
 /** Public: vehicle filters for sale listing */
+// Modify your functions to check database connection first
 export async function getVehicleFilters() {
   try {
-    const data = await retryAsync(() => getFiltersForMode("sale"), 3, 200);
+    // Check if database is connected first
+    const connected = await isDatabaseConnected();
+    if (!connected) {
+      console.warn("Database not available, using fallback filter options");
+      return { 
+        success: true, 
+        data: {
+          priceRange: { min: 0, max: 70000000 },
+          yearRange: { min: 2010, max: new Date().getFullYear() },
+          makes: [],
+          bodyTypes: [],
+          fuelTypes: [],
+          transmissions: []
+        }
+      };
+    }
+
+    const data = await retryAsync(() => getFiltersForMode("sale"), 2, 200);
     return { success: true, data };
   } catch (err) {
     console.error("getVehicleFilters error:", err);
@@ -224,7 +251,7 @@ export async function getVehicleFilters() {
 /** Public: rental filters */
 export async function getRentalFilters() {
   try {
-    const data = await retryAsync(() => getFiltersForMode("rent"), 3, 200);
+    const data = await retryAsync(() => getFiltersForMode("rent"), 2, 200);
     return { success: true, data };
   } catch (err) {
     console.error("getRentalFilters error:", err);
@@ -415,12 +442,20 @@ export async function getVehicleById(vehicleId) {
       dbUser = await db.user.findUnique({ where: { clerkUserId: userId } });
     }
 
+    // fetch vehicle with retry and include inspections + owner + images
     const vehicle = await retryAsync(async () => {
       return await db.vehicle.findUnique({
         where: { id: Number(vehicleId) },
         include: {
           images: { orderBy: { isPrimary: "desc" } },
           owner: { select: { id: true, fullName: true, email: true, phone: true } },
+          inspections: {
+            where: { status: { not: "CANCELLED" } },
+            include: {
+              user: true,
+              inspector: true,
+            },
+          },
         },
       });
     }, 3, 200);
@@ -451,12 +486,12 @@ export async function getVehicleById(vehicleId) {
       Vehicle_owner_Number: vehicle.Vehicle_owner_Number,
       Vehicle_owner_Email: vehicle.Vehicle_owner_Email,
       owner: vehicle.owner,
-      images: vehicle.images.map((i) => ({ url: i.url, isPrimary: i.isPrimary })),
+      images: (vehicle.images || []).map((i) => ({ url: i.url, isPrimary: i.isPrimary })),
+      inspections: vehicle.inspections || [],
     };
 
     // safety: only include owner contact (email/phone) when requester is authenticated
     if (!dbUser) {
-      // remove contact fields for unauthenticated callers
       delete base.Vehicle_owner_Email;
       delete base.Vehicle_owner_Number;
       if (base.owner) {
@@ -471,6 +506,7 @@ export async function getVehicleById(vehicleId) {
     return { success: false, error: "Error fetching vehicle: " + (err?.message || String(err)) };
   }
 }
+
 
 /** Toggle saved vehicle (favorite) */
 export async function toggleSavedVehicle(vehicleId) {

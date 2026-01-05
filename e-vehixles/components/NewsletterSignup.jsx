@@ -8,6 +8,51 @@ export default function NewsletterSignup() {
   const [isVisible, setIsVisible] = useState(false);
   const [floatingIcons, setFloatingIcons] = useState([]);
   const [isClient, setIsClient] = useState(false);
+ 
+
+  // NEW STATES
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  // === EXISTING EFFECTS (your animation & observer code) ===
+  useEffect(() => {
+    if (!sectionRef.current) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) setIsVisible(true);
+    }, { threshold: 0.1 });
+    observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // === HANDLE SUBMIT ===
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const res = await fetch("/api/newsletter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, name }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Something went wrong");
+
+      setMessage("✅ Successfully subscribed!");
+      setEmail("");
+      setName("");
+    } catch (err) {
+      setMessage("❌ " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+
 
   useEffect(() => {
     setIsClient(true);
@@ -107,43 +152,57 @@ export default function NewsletterSignup() {
           </motion.p>
         </motion.div>
 
-        <motion.form 
-          className="flex flex-col sm:flex-row justify-center gap-4 max-w-xl mx-auto"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : 20 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-        >
-          <motion.div 
-            className="relative flex-grow"
-            whileHover={{ scale: 1.02 }}
-            whileFocus={{ scale: 1.02 }}
-          >
-            <input
-              type="email"
-              placeholder="Your Email Address"
-              className="w-full px-5 py-4 rounded-xl border-2 border-amber-200 bg-white shadow-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-300 focus:outline-none transition-all"
-              required
-            />
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-amber-400" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-          </motion.div>
-          
-          <motion.button
-            type="submit"
-            className="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl shadow-lg hover:from-amber-600 hover:to-orange-600 transition-all transform hover:-translate-y-0.5 hover:shadow-xl"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            Subscribe Now
-          </motion.button>
-        </motion.form>
+<motion.form 
+  className="flex flex-col sm:flex-row justify-center gap-4 max-w-xl mx-auto"
+  initial={{ opacity: 0, y: 20 }}
+  animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : 20 }}
+  transition={{ duration: 0.6, delay: 0.4 }}
+  onSubmit={handleSubmit}
+>
+  <motion.div 
+    className="relative flex-grow"
+    whileHover={{ scale: 1.02 }}
+    whileFocus={{ scale: 1.02 }}
+  >
+    <input
+      type="email"
+      placeholder="Your Email Address"
+      className="w-full px-5 py-4 rounded-xl border-2 border-amber-200 bg-white shadow-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-300 focus:outline-none transition-all"
+      required
+      value={email}
+      onChange={(e) => setEmail(e.target.value)}
+    />
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-amber-400" 
+      fill="none" 
+      viewBox="0 0 24 24" 
+      stroke="currentColor"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  </motion.div>
+  
+  <motion.button
+    type="submit"
+    className="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl shadow-lg hover:from-amber-600 hover:to-orange-600 transition-all transform hover:-translate-y-0.5 hover:shadow-xl"
+    whileHover={{ scale: 1.05 }}
+    whileTap={{ scale: 0.95 }}
+    disabled={loading}
+  >
+    {loading ? "Subscribing..." : "Subscribe Now"}
+  </motion.button>
+</motion.form>
+
+{message && (
+  <motion.p 
+    className="mt-4 text-sm font-medium"
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+  >
+    {message}
+  </motion.p>
+)}
 
         <motion.p 
           className="text-xs text-gray-500 mt-4 max-w-md mx-auto"
